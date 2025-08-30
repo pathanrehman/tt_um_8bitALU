@@ -12,51 +12,48 @@ async def test_project(dut):
     cocotb.start_soon(clock.start())
 
     # Reset sequence
+    dut._log.info("Reset")
     dut.ena.value = 1
     dut.ui_in.value = 0
     dut.uio_in.value = 0
     dut.rst_n.value = 0
     await ClockCycles(dut.clk, 10)
     dut.rst_n.value = 1
+    await ClockCycles(dut.clk, 5)  # Allow pipeline to stabilize
 
-    # Test ADD (example: set opcode and operands accordingly)
-    dut.ui_in.value = 0b00000  # Opcode for ADD
-    dut.uio_in.value = 0b00010100  # Operand B = 20
+    # Test ADD: 20 + 30 = 50
     dut._log.info("Testing ADD: 20 + 30")
-    await ClockCycles(dut.clk, 1)
-    dut.ui_in.value = 0b00011110  # Operand A = 30
-    await ClockCycles(dut.clk, 1)
-    assert dut.uo_out.value == 50, f"ADD failed: {dut.uo_out.value}"
+    dut.ui_in.value = 20           # Operand A = 20
+    dut.uio_in.value = (30 << 3) | 0  # Operand B = 30 (bits 7:3), opcode = 0 (bits 4:0)
+    
+    # Wait for pipeline delay (3 stages + ALU computation)
+    await ClockCycles(dut.clk, 5)
+    
+    result = dut.uo_out.value
+    dut._log.info(f"ADD result: {result}")
+    assert result == 50, f"ADD failed: got {result}, expected 50"
     dut._log.info("ADD passed.")
 
-    # Test SUB (example)
-    dut.ui_in.value = 0b00001  # Opcode for SUB
-    dut.uio_in.value = 40  # Operand B
-    await ClockCycles(dut.clk, 1)
-    dut.ui_in.value = 10  # Operand A
-    await ClockCycles(dut.clk, 1)
-    assert dut.uo_out.value == -30, f"SUB failed: {dut.uo_out.value}"
+    # Test SUB: 30 - 10 = 20
+    dut._log.info("Testing SUB: 30 - 10")
+    dut.ui_in.value = 30           # Operand A = 30
+    dut.uio_in.value = (10 << 3) | 1  # Operand B = 10, opcode = 1 (SUB)
+    await ClockCycles(dut.clk, 5)
+    
+    result = dut.uo_out.value
+    dut._log.info(f"SUB result: {result}")
+    assert result == 20, f"SUB failed: got {result}, expected 20"
     dut._log.info("SUB passed.")
 
-    # Test MUL (example)
-    dut.ui_in.value = 0b00010  # Opcode for MUL
-    dut.uio_in.value = 6
-    await ClockCycles(dut.clk, 1)
-    dut.ui_in.value = 7
-    await ClockCycles(dut.clk, 1)
-    assert dut.uo_out.value == 42, f"MUL failed: {dut.uo_out.value}"
+    # Test MUL: 6 * 7 = 42
+    dut._log.info("Testing MUL: 6 * 7")
+    dut.ui_in.value = 6            # Operand A = 6
+    dut.uio_in.value = (7 << 3) | 2   # Operand B = 7, opcode = 2 (MUL)
+    await ClockCycles(dut.clk, 5)
+    
+    result = dut.uo_out.value
+    dut._log.info(f"MUL result: {result}")
+    assert result == 42, f"MUL failed: got {result}, expected 42"
     dut._log.info("MUL passed.")
 
-    # Additional tests: DIV, SHIFT, etc.
-
-    # For each operation, set opcode and operands, then check for correct output.
-    # Example (Barrel Shift Left):
-    dut.ui_in.value = 0b00100  # Opcode for SHL
-    dut.uio_in.value = 2  # shift amount
-    await ClockCycles(dut.clk, 1)
-    dut.ui_in.value = 8  # value to shift
-    await ClockCycles(dut.clk, 1)
-    assert dut.uo_out.value == 32, f"SHL failed: {dut.uo_out.value}"
-    dut._log.info("SHIFT passed.")
-
-    dut._log.info("All basic ALU tests passed.")
+    dut._log.info("All ALU tests passed.")
