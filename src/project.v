@@ -14,56 +14,58 @@ module tt_um_example (
     input  wire       rst_n
 );
 
-  // ALU pipeline registers and control signals
-  reg [31:0] alu_in_a, alu_in_b;
-  reg [4:0]  alu_op;
+  // ALU inputs - properly driven from input pins
+  wire [31:0] alu_in_a, alu_in_b;
+  wire [4:0]  alu_op;
   wire [31:0] alu_result;
   wire        alu_zero, alu_neg, alu_carry, alu_overflow;
 
-  // Example pipeline stage registers
+  // Pipeline stage registers
   reg [31:0] ex_result, mem_result, wb_result;
-  reg ex_zero, ex_neg, ex_carry, ex_overflow;
-  
-  // Forwarding/bypass logic
+  reg [3:0]  wb_flags;
+
+  // Connect input pins to ALU inputs
+  assign alu_in_a = {24'b0, ui_in};        // Extend 8-bit input to 32-bit
+  assign alu_in_b = {24'b0, uio_in[7:3]};  // Use upper 5 bits for operand B
+  assign alu_op = uio_in[4:0];             // Use lower 5 bits for operation
+
+  // Pipeline registers
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      ex_result <= 0;
-      mem_result <= 0;
-      wb_result <= 0;
-      ex_zero <= 0;
-      ex_neg <= 0;
-      ex_carry <= 0;
-      ex_overflow <= 0;
-    end else begin
+      ex_result <= 32'b0;
+      mem_result <= 32'b0;
+      wb_result <= 32'b0;
+      wb_flags <= 4'b0;
+    end else if (ena) begin
       ex_result <= alu_result;
-      ex_zero <= alu_zero;
-      ex_neg <= alu_neg;
-      ex_carry <= alu_carry;
-      ex_overflow <= alu_overflow;
       mem_result <= ex_result;
       wb_result <= mem_result;
+      wb_flags <= {alu_zero, alu_neg, alu_carry, alu_overflow};
     end
   end
 
-  // ALU operation selection (add, sub, mul, div, shifter, etc.)
+  // ALU instantiation
   alu32_pipelined u_alu (
-    .a(alu_in_a), .b(alu_in_b), .op(alu_op),
+    .a(alu_in_a), 
+    .b(alu_in_b), 
+    .op(alu_op),
     .result(alu_result),
-    .zero(alu_zero), .neg(alu_neg),
-    .carry(alu_carry), .overflow(alu_overflow),
-    .clk(clk), .rst_n(rst_n)
+    .zero(alu_zero), 
+    .neg(alu_neg),
+    .carry(alu_carry), 
+    .overflow(alu_overflow),
+    .clk(clk), 
+    .rst_n(rst_n)
   );
 
-  // Mapping outputs (example: assign lower 8 bits to output; customize mapping as needed)
-  assign uo_out  = wb_result[7:0];
-  assign uio_out = 0;
-  assign uio_oe  = 0;
+  // Output assignments
+  assign uo_out = wb_result[7:0];         // Lower 8 bits of result
+  assign uio_out = {4'b0, wb_flags};      // Flags output
+  assign uio_oe = 8'h0F;                  // Enable lower 4 bits for flag output
 
-  // List all unused inputs to prevent warnings
-  wire _unused = &{ena, clk, rst_n, 1'b0};
 endmodule
 
-// ---------------- ALU Module Definition ----------------
+// ALU Module (updated to use clock properly)
 module alu32_pipelined (
   input  wire [31:0] a, b,
   input  wire [4:0]  op,
@@ -71,34 +73,41 @@ module alu32_pipelined (
   output reg         zero, neg, carry, overflow,
   input  wire        clk, rst_n
 );
+  
   wire [31:0] add_sub_out, mul_out, div_out, shift_out;
   wire        add_carry, add_overflow;
 
-  // Addition/Subtraction
-  assign {add_carry, add_sub_out} = (op == 0) ? a + b : a - b;
-  assign add_overflow = (op == 0) ? ((a[31] == b[31]) && (add_sub_out[31] != a[31])) : ((a[31] != b[31]) && (add_sub_out[31] != a[31]));
-
-  // Multiplier
+  // Combinational operations
+  assign {add_carry, add_sub_out} = (op[0] == 0) ? a + b : a - b;
+  assign add_overflow = (op[0] == 0) ? 
+    ((a[31] == b[31]) && (add_sub_out[31] != a[31])) : 
+    ((a[31] != b[31]) && (add_sub_out[31] != a[31]));
+  
   assign mul_out = a * b;
-
-  // Divider
   assign div_out = (b != 0) ? a / b : 32'b0;
+  assign shift_out = (op[0] == 0) ? a << b[4:0] : a >> b[4:0];
 
-  // Barrel shifter (example: shift left)
-  assign shift_out = (op == 4) ? a << b[4:0] : a >> b[4:0];
-
-  always @(*) begin
-    case (op)
-      0: result = add_sub_out;     // ADD
-      1: result = add_sub_out;     // SUB
-      2: result = mul_out;         // MUL
-      3: result = div_out;         // DIV
-      4: result = shift_out;       // SHIFT
-      default: result = 0;
-    endcase
-    zero = (result == 0);
-    neg = result[31];
-    carry = add_carry;
-    overflow = add_overflow;
+  // Registered outputs for pipeline
+  always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      result <= 32'b0;
+      zero <= 1'b0;
+      neg <= 1'b0;
+      carry <= 1'b0;
+      overflow <= 1'b0;
+    end else begin
+      case (op[4:1])
+        4'b0000: result <= add_sub_out;     // ADD/SUB
+        4'b0001: result <= mul_out;         // MUL
+        4'b0010: result <= div_out;         // DIV
+        4'b0011: result <= shift_out;       // SHIFT
+        default: result <= 32'b0;
+      endcase
+      
+      zero <= (result == 0);
+      neg <= result[31];
+      carry <= (op[4:1] == 4'b0000) ? add_carry : 1'b0;
+      overflow <= (op[4:1] == 4'b0000) ? add_overflow : 1'b0;
+    end
   end
 endmodule
