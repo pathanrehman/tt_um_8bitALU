@@ -14,33 +14,33 @@ module tt_um_example (
     input  wire       rst_n
 );
 
-  // ALU inputs - properly driven from input pins
+  // ALU inputs - properly mapped from input pins
   wire [31:0] alu_in_a, alu_in_b;
   wire [4:0]  alu_op;
   wire [31:0] alu_result;
   wire        alu_zero, alu_neg, alu_carry, alu_overflow;
 
   // Pipeline stage registers
-  reg [31:0] ex_result, mem_result, wb_result;
-  reg [3:0]  wb_flags;
+  reg [31:0] pipe1_result, pipe2_result, pipe3_result;
+  reg [3:0]  pipe3_flags;
 
-  // Connect input pins to ALU inputs
-  assign alu_in_a = {24'b0, ui_in};        // Extend 8-bit input to 32-bit
-  assign alu_in_b = {24'b0, uio_in[7:3]};  // Use upper 5 bits for operand B
-  assign alu_op = uio_in[4:0];             // Use lower 5 bits for operation
+  // Map inputs - extend 8-bit inputs to 32-bit
+  assign alu_in_a = {24'b0, ui_in};           // ui_in as operand A
+  assign alu_in_b = {24'b0, uio_in[7:3]};     // upper 5 bits of uio_in as operand B  
+  assign alu_op = uio_in[4:0];                // lower 5 bits of uio_in as opcode
 
-  // Pipeline registers
+  // 3-stage pipeline to match typical ALU pipeline depth
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      ex_result <= 32'b0;
-      mem_result <= 32'b0;
-      wb_result <= 32'b0;
-      wb_flags <= 4'b0;
+      pipe1_result <= 32'b0;
+      pipe2_result <= 32'b0;
+      pipe3_result <= 32'b0;
+      pipe3_flags <= 4'b0;
     end else if (ena) begin
-      ex_result <= alu_result;
-      mem_result <= ex_result;
-      wb_result <= mem_result;
-      wb_flags <= {alu_zero, alu_neg, alu_carry, alu_overflow};
+      pipe1_result <= alu_result;
+      pipe2_result <= pipe1_result;
+      pipe3_result <= pipe2_result;
+      pipe3_flags <= {alu_zero, alu_neg, alu_carry, alu_overflow};
     end
   end
 
@@ -59,13 +59,13 @@ module tt_um_example (
   );
 
   // Output assignments
-  assign uo_out = wb_result[7:0];         // Lower 8 bits of result
-  assign uio_out = {4'b0, wb_flags};      // Flags output
-  assign uio_oe = 8'h0F;                  // Enable lower 4 bits for flag output
+  assign uo_out = pipe3_result[7:0];          // Lower 8 bits of pipelined result
+  assign uio_out = {4'b0, pipe3_flags};       // Flags on lower 4 bits
+  assign uio_oe = 8'h0F;                      // Enable lower 4 bits for output
 
 endmodule
 
-// ALU Module (updated to use clock properly)
+// Updated ALU Module
 module alu32_pipelined (
   input  wire [31:0] a, b,
   input  wire [4:0]  op,
@@ -74,20 +74,8 @@ module alu32_pipelined (
   input  wire        clk, rst_n
 );
   
-  wire [31:0] add_sub_out, mul_out, div_out, shift_out;
-  wire        add_carry, add_overflow;
-
-  // Combinational operations
-  assign {add_carry, add_sub_out} = (op[0] == 0) ? a + b : a - b;
-  assign add_overflow = (op[0] == 0) ? 
-    ((a[31] == b[31]) && (add_sub_out[31] != a[31])) : 
-    ((a[31] != b[31]) && (add_sub_out[31] != a[31]));
+  reg [32:0] temp_result;
   
-  assign mul_out = a * b;
-  assign div_out = (b != 0) ? a / b : 32'b0;
-  assign shift_out = (op[0] == 0) ? a << b[4:0] : a >> b[4:0];
-
-  // Registered outputs for pipeline
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       result <= 32'b0;
@@ -96,18 +84,22 @@ module alu32_pipelined (
       carry <= 1'b0;
       overflow <= 1'b0;
     end else begin
-      case (op[4:1])
-        4'b0000: result <= add_sub_out;     // ADD/SUB
-        4'b0001: result <= mul_out;         // MUL
-        4'b0010: result <= div_out;         // DIV
-        4'b0011: result <= shift_out;       // SHIFT
-        default: result <= 32'b0;
+      case (op[2:0])  // Use only lower 3 bits for simplicity
+        3'b000: temp_result = a + b;        // ADD
+        3'b001: temp_result = a - b;        // SUB
+        3'b010: temp_result = a * b;        // MUL (lower 32 bits)
+        3'b011: temp_result = (b != 0) ? a / b : 32'b0;  // DIV
+        3'b100: temp_result = a << b[4:0];  // SHIFT LEFT
+        3'b101: temp_result = a >> b[4:0];  // SHIFT RIGHT
+        default: temp_result = 33'b0;
       endcase
       
-      zero <= (result == 0);
-      neg <= result[31];
-      carry <= (op[4:1] == 4'b0000) ? add_carry : 1'b0;
-      overflow <= (op[4:1] == 4'b0000) ? add_overflow : 1'b0;
+      result <= temp_result[31:0];
+      carry <= temp_result[32];
+      zero <= (temp_result[31:0] == 32'b0);
+      neg <= temp_result[31];
+      overflow <= (op[2:0] == 3'b000) ? // Only for ADD
+        ((a[31] == b[31]) && (temp_result[31] != a[31])) : 1'b0;
     end
   end
 endmodule
