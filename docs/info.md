@@ -9,7 +9,7 @@ This project implements an **8-bit pipelined Arithmetic Logic Unit (ALU)** desig
 ### Architecture Overview
 
 The ALU consists of two main components:
-1. **Top-level module** (`tt_um_example`): Handles I/O mapping, pipeline control, and result formatting
+1. **Top-level module** (`tt_um_8bitalu`): Handles I/O mapping, pipeline control, and result formatting
 2. **ALU core** (`alu32_pipelined`): Performs the actual arithmetic and logical operations with 32-bit internal precision
 
 ### Input Encoding Strategy
