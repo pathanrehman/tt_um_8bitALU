@@ -1,20 +1,17 @@
-<!---
-
-This file is used to generate your project datasheet. Please fill in the information below and delete any unused
-sections.
-
-You can also include images in this folder and reference them in the markdown. Each image must be less than
-512 kb in size, and the combined size of all images must be less than 1 MB.
--->
 
 ## How it works
 
-Explain how your project works
+This project implements a 32-bit fully pipelined Arithmetic Logic Unit (ALU) in Verilog, supporting arithmetic, logical, multiply, divide, and barrel shift operations. It features advanced flag management, integrated pipeline stages for increased throughput, and bypass logic to resolve data hazards. Inputs select operations and operands; results and flags are updated in each clock cycle via dedicated outputs.
 
 ## How to test
 
-Explain how to use your project
+1. Connect the chip to a Tiny Tapeout demo board or compatible FPGA.
+2. Provide 32-bit operands and an operation code through the input pins (`ui_in` and `uio_in`).
+3. Set the reset (`rst_n`) and clock (`clk`) signals appropriately.
+4. Observe output pins (`uo_out`) for the result and flag status—verify correct output for additions, multiplications, shifts, etc.
+5. Test sequential operations to confirm pipelined operation and proper bypassing of results.
+6. Optionally, use simulation tools (e.g., Cocotb or GTKWave) for automated verification.
 
 ## External hardware
 
-List external hardware used in your project (e.g. PMOD, LED display, etc), if any
+This project does not require any external hardware beyond the standard Tiny Tapeout test/demo boards. Optionally, it can be connected to an FPGA development board for initial verification prior to tapeout. There are no dependencies on displays, sensors, or PMODs.[4][1]
