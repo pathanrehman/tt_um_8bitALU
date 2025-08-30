@@ -1,13 +1,13 @@
 # Tiny Tapeout project information
 project:
-  title:        "32-bit Pipelined ALU"
-  author:       "Your Name"
+  title:        "8-bit Pipelined ALU"
+  author:       "Pathan Rehman Ahmed Khan"
   discord:      ""
-  description:  "A 32-bit fully pipelined ALU with multiply/divide, barrel shifter, and advanced flag/pipeline logic"
+  description:  "A 8-bit fully pipelined ALU with multiply/divide, barrel shifter, and advanced flag/pipeline logic"
   language:     "Verilog"
   clock_hz:     0
   tiles: "1x1"
-  top_module:  "tt_um_example"
+  top_module:  "tt_um_8bitalu"
   source_files:
     - "project.v"
 
